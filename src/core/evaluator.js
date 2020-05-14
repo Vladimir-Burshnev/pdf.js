@@ -83,6 +83,7 @@ import { LocalImageCache } from "./image_utils.js";
 import { MurmurHash3_64 } from "./murmurhash3.js";
 import { OperatorList } from "./operator_list.js";
 import { PDFImage } from "./image.js";
+import {BoundingBoxesCalculator} from "./bounding_boxes";
 
 var PartialEvaluator = (function PartialEvaluatorClosure() {
   const DefaultPartialEvaluatorOptions = {
@@ -757,7 +758,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         .then(translated => {
           state.font = translated.font;
           translated.send(this.handler);
-          return translated.loadedName;
+          return translated;
         });
     },
 
@@ -838,9 +839,9 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                 operatorList,
                 task,
                 stateManager.state
-              ).then(function (loadedName) {
-                operatorList.addDependency(loadedName);
-                gStateObj.push([key, [loadedName, value[1]]]);
+              ).then(function (translated) {
+                operatorList.addDependency(translated.loadedName);
+                gStateObj.push([key, [translated.loadedName, value[1]]]);
               });
             });
             break;
@@ -1190,6 +1191,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       resources,
       operatorList,
       initialState = null,
+      intent,
     }) {
       // Ensure that `resources`/`initialState` is correctly initialized,
       // even if the provided parameter is e.g. `null`.
@@ -1200,6 +1202,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         throw new Error('getOperatorList: missing "operatorList" parameter');
       }
 
+      var boundingBoxCalculator = new BoundingBoxesCalculator(intent !== 'oplist');
       var self = this;
       var xref = this.xref;
       let parsingText = false;
@@ -1323,6 +1326,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                       }, rejectXObject);
                     return;
                   } else if (type.name === "Image") {
+                    boundingBoxCalculator.parseOperator(OPS.paintXObject, [type.name]);
                     self
                       .buildPaintImageXObject({
                         resources,
@@ -1373,9 +1377,10 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                     task,
                     stateManager.state
                   )
-                  .then(function (loadedName) {
-                    operatorList.addDependency(loadedName);
-                    operatorList.addOp(OPS.setFont, [loadedName, fontSize]);
+                  .then(function (translated) {
+                    boundingBoxCalculator.parseOperator(OPS.setFont, [fontSize, translated]);
+                    operatorList.addDependency(translated.loadedName);
+                    operatorList.addOp(OPS.setFont, [translated.loadedName, fontSize]);
                   })
               );
               return;
@@ -1442,6 +1447,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                 continue;
               }
               operatorList.addOp(OPS.nextLine);
+              boundingBoxCalculator.parseOperator(OPS.nextLine);
               args[0] = self.handleText(args[0], stateManager.state);
               fn = OPS.showText;
               break;
@@ -1453,6 +1459,9 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               operatorList.addOp(OPS.nextLine);
               operatorList.addOp(OPS.setWordSpacing, [args.shift()]);
               operatorList.addOp(OPS.setCharSpacing, [args.shift()]);
+              boundingBoxCalculator.parseOperator(OPS.nextLine);
+              boundingBoxCalculator.parseOperator(OPS.setWordSpacing, [args.shift()]);
+              boundingBoxCalculator.parseOperator(OPS.setCharSpacing, [args.shift()]);
               args[0] = self.handleText(args[0], stateManager.state);
               fn = OPS.showText;
               break;
@@ -1615,12 +1624,15 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
             case OPS.closePath:
             case OPS.rectangle:
               self.buildPath(operatorList, fn, args, parsingText);
+              boundingBoxCalculator.parseOperator(fn, args);
               continue;
-            case OPS.markPoint:
-            case OPS.markPointProps:
             case OPS.beginMarkedContent:
             case OPS.beginMarkedContentProps:
             case OPS.endMarkedContent:
+              boundingBoxCalculator.parseOperator(fn, args);
+              continue;
+            case OPS.markPoint:
+            case OPS.markPointProps:
             case OPS.beginCompat:
             case OPS.endCompat:
               // Ignore operators where the corresponding handlers are known to
@@ -1646,6 +1658,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                 }
               }
           }
+          boundingBoxCalculator.parseOperator(fn, args);
           operatorList.addOp(fn, args);
         }
         if (stop) {
@@ -1655,7 +1668,10 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         // Some PDFs don't close all restores inside object/form.
         // Closing those for them.
         closePendingRestoreOPS();
-        resolve();
+        // Add extra data about marked content as last element of operator list
+        // with corresponding function 'save', because it won't affect on
+        // the process of rendering
+        resolve(boundingBoxCalculator.boundingBoxes);
       }).catch(reason => {
         if (reason instanceof AbortException) {
           return;
@@ -3778,4 +3794,8 @@ var EvaluatorPreprocessor = (function EvaluatorPreprocessorClosure() {
   return EvaluatorPreprocessor;
 })();
 
-export { PartialEvaluator };
+export {
+  PartialEvaluator,
+  StateManager,
+  TextState
+};
