@@ -520,10 +520,18 @@ gulp.task("buildnumber", function (done) {
   });
 });
 
+gulp.task('buildnumber-custom', function (done) {
+  console.log();
+  console.log('### Getting custom build number');
+
+  gulp.src('./version.json')
+    .pipe(gulp.dest(BUILD_DIR))
+    .on('end', done);
+});
+
 gulp.task("default_preferences-pre", function () {
   console.log();
   console.log("### Building `default_preferences.json`");
-
   // Refer to the comment in the 'lib' task below.
   function babelPluginReplaceNonWebPackRequire(babel) {
     return {
@@ -667,6 +675,10 @@ gulp.task("cmaps", function (done) {
   done();
 });
 
+gulp.task('bundle', gulp.series('buildnumber-custom', function () {
+  return createBundle(DEFINES).pipe(gulp.dest(BUILD_DIR));
+}));
+
 function preprocessCSS(source, mode, defines, cleanup) {
   var outName = getTempFile("~preprocess", ".css");
   builder.preprocessCSS(mode, source, outName);
@@ -732,7 +744,7 @@ function buildGeneric(defines, dir) {
 // HTML5 browsers, which implement modern ECMAScript features.
 gulp.task(
   "generic",
-  gulp.series("buildnumber", "default_preferences", "locale", function () {
+  gulp.series("buildnumber-custom", "default_preferences", "locale", function () {
     console.log();
     console.log("### Creating generic viewer");
     var defines = builder.merge(DEFINES, { GENERIC: true });
@@ -781,7 +793,7 @@ function buildComponents(defines, dir) {
 
 gulp.task(
   "components",
-  gulp.series("buildnumber", function () {
+  gulp.series("buildnumber-custom", function () {
     console.log();
     console.log("### Creating generic components");
     var defines = builder.merge(DEFINES, { COMPONENTS: true, GENERIC: true });
@@ -792,7 +804,7 @@ gulp.task(
 
 gulp.task(
   "components-es5",
-  gulp.series("buildnumber", function () {
+  gulp.series("buildnumber-custom", function () {
     console.log();
     console.log("### Creating generic (ES5) components");
     var defines = builder.merge(DEFINES, {
@@ -977,7 +989,7 @@ function preprocessDefaultPreferences(content) {
 
 gulp.task(
   "mozcentral-pre",
-  gulp.series("buildnumber", "default_preferences", function () {
+  gulp.series("buildnumber-custom", "default_preferences", function () {
     console.log();
     console.log("### Building mozilla-central extension");
     var defines = builder.merge(DEFINES, { MOZCENTRAL: true });
@@ -1049,7 +1061,7 @@ gulp.task("mozcentral", gulp.series("mozcentral-pre"));
 
 gulp.task(
   "chromium-pre",
-  gulp.series("buildnumber", "default_preferences", "locale", function () {
+  gulp.series("buildnumber-custom", "default_preferences", "locale", function () {
     console.log();
     console.log("### Building Chromium extension");
     var defines = builder.merge(DEFINES, { CHROME: true, SKIP_BABEL: false });
