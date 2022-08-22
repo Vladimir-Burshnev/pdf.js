@@ -1256,6 +1256,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               if (name) {
                 const localImage = localImageCache.getByName(name);
                 if (localImage) {
+                  boundingBoxCalculator.parseOperator(OPS.paintXObject, ["Image"]);
                   operatorList.addOp(localImage.fn, localImage.args);
                   args = null;
                   continue;
@@ -1274,6 +1275,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                   if (xobj instanceof Ref) {
                     const localImage = localImageCache.getByRef(xobj);
                     if (localImage) {
+                      boundingBoxCalculator.parseOperator(OPS.paintXObject, ["Image"]);
                       operatorList.addOp(localImage.fn, localImage.args);
 
                       resolveXObject();
@@ -1285,6 +1287,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                       self.pageIndex
                     );
                     if (globalImage) {
+                      boundingBoxCalculator.parseOperator(OPS.paintXObject, ["Image"]);
                       operatorList.addDependency(globalImage.objId);
                       operatorList.addOp(globalImage.fn, globalImage.args);
 
