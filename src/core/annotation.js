@@ -48,19 +48,21 @@ class AnnotationFactory {
    * @returns {Promise} A promise that is resolved with an {Annotation}
    *   instance.
    */
-  static create(xref, ref, pdfManager, idFactory) {
+  static create(xref, ref, pdfManager, idFactory, rotate, cropBox) {
     return pdfManager.ensure(this, "_create", [
       xref,
       ref,
       pdfManager,
       idFactory,
+      rotate,
+      cropBox
     ]);
   }
 
   /**
    * @private
    */
-  static _create(xref, ref, pdfManager, idFactory) {
+  static _create(xref, ref, pdfManager, idFactory, rotate, cropBox) {
     const dict = xref.fetchIfRef(ref);
     if (!isDict(dict)) {
       return undefined;
@@ -78,8 +80,10 @@ class AnnotationFactory {
       subtype,
       id,
       pdfManager,
+      rotate,
+      cropBox,
     };
-
+    console.log(subtype, dict.getArray('Rect'));
     switch (subtype) {
       case "Link":
         return new LinkAnnotation(parameters);
@@ -232,6 +236,46 @@ class Annotation {
     this.setContents(dict.get("Contents"));
     this.setModificationDate(dict.get("M"));
     this.setFlags(dict.get("F"));
+
+    if (!this.rotatable && params.rotate) {
+      const rect = dict.getArray("Rect");
+      const minX = Math.min(rect[0], rect[2]);
+      const maxX = Math.max(rect[0], rect[2]);
+      const minY = Math.min(rect[1], rect[3]);
+      const maxY = Math.max(rect[1], rect[3]);
+      let nr = [];
+      switch(params.rotate) {
+        case 90:
+          nr = [minX, maxY, minX + maxY - minY, maxY + maxX - minX];
+          break;
+        case 180:
+          nr = [minX, maxY, minX - (maxX - minX), maxY + (maxY - minY)];
+          break;
+        case 270:
+          nr = [minX, maxY, minX - maxY + minY, maxY - maxX + minX];
+          break;
+        default:
+          nr = rect;
+          break;
+      }
+      if (nr[2] < params.cropBox[0])
+        nr[2] = params.cropBox[0];
+      else if (nr[2] > params.cropBox[2])
+        nr[2] = params.cropBox[2];
+
+      if (nr[3] < params.cropBox[1])
+        nr[3] = params.cropBox[1];
+      else if (nr[3] > params.cropBox[3])
+        nr[3] = params.cropBox[3];
+
+      dict.set("Rect", nr);
+      if (dict.getArray("QuadPoints") && params.rotate) {
+        dict.set("QuadPoints", [nr[0], nr[1], nr[2], nr[1], nr[0], nr[3], nr[2], nr[3]]);
+      }
+    } else {
+      params.rotate = 0;
+    }
+
     this.setRectangle(dict.getArray("Rect"));
     this.setColor(dict.getArray("C"));
     this.setBorderStyle(dict);
@@ -247,6 +291,7 @@ class Annotation {
       id: params.id,
       modificationDate: this.modificationDate,
       rect: this.rectangle,
+      rotate: params.rotate,
       subtype: params.subtype,
     };
   }
@@ -281,6 +326,15 @@ class Annotation {
   }
 
   /**
+   * @private
+   */
+   _isRotatable(flags) {
+    return (
+      !this._hasFlag(flags, AnnotationFlag.NOROTATE)
+    );
+  }
+
+  /**
    * @type {boolean}
    */
   get viewable() {
@@ -298,6 +352,16 @@ class Annotation {
       return false;
     }
     return this._isPrintable(this.flags);
+  }
+
+  /**
+   * @type {boolean}
+   */
+   get rotatable() {
+    if (this.flags === 0) {
+      return true;
+    }
+    return this._isRotatable(this.flags);
   }
 
   /**

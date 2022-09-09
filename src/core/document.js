@@ -413,7 +413,9 @@ class Page {
               this.xref,
               annotationRef,
               this.pdfManager,
-              this.idFactory
+              this.idFactory,
+              this.rotate,
+              this.pageDict.getArray("CropBox"),
             ).catch(function (reason) {
               warn(`_parsedAnnotations: "${reason}".`);
               return null;

@@ -262,6 +262,7 @@ class AnnotationElement {
       trigger,
       color: data.color,
       title: data.title,
+      rotate: data.rotate,
       modificationDate: data.modificationDate,
       contents: data.contents,
       hideWrapper: true,
@@ -389,6 +390,7 @@ class TextAnnotationElement extends AnnotationElement {
     const image = document.createElement("img");
     image.style.height = this.container.style.height;
     image.style.width = this.container.style.width;
+    image.style.transform = `rotate(${360 - ((this.data.rotate || 0) % 360)}deg)`;
     image.src =
       this.imageResourcesPath +
       "annotation-" +
@@ -688,7 +690,8 @@ class PopupAnnotationElement extends AnnotationElement {
     const popup = new PopupElement({
       container: this.container,
       trigger: parentElement,
-      color: this.data.color,
+      color: this.data.color,      
+      rotate: this.data.rotate,
       title: this.data.title,
       modificationDate: this.data.modificationDate,
       contents: this.data.contents,
@@ -713,6 +716,7 @@ class PopupElement {
     this.container = parameters.container;
     this.trigger = parameters.trigger;
     this.color = parameters.color;
+    this.rotate = parameters.rotate;
     this.title = parameters.title;
     this.modificationDate = parameters.modificationDate;
     this.contents = parameters.contents;
@@ -743,6 +747,7 @@ class PopupElement {
 
     const popup = document.createElement("div");
     popup.className = "popup";
+    popup.style.transform = `rotate(${360 - ((this.rotate || 0) % 360)}deg)`;
 
     const color = this.color;
     if (color) {
