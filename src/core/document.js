@@ -61,7 +61,8 @@ const LETTER_SIZE_MEDIABOX = [0, 0, 612, 792];
 function isAnnotationRenderable(annotation, intent) {
   return (
     (intent === "display" && annotation.viewable) ||
-    (intent === "print" && annotation.printable)
+    (intent === "print" && annotation.printable) ||
+    intent === "oplist"
   );
 }
 
@@ -269,7 +270,7 @@ class Page {
     });
 
     const dataPromises = Promise.all([contentStreamPromise, resourcesPromise]);
-    let boundingBoxes;
+    let boundingBoxes, positionByOperationIndex;
     const pageListPromise = dataPromises.then(([contentStream]) => {
       const opList = new OperatorList(intent, sink, this.pageIndex);
 
@@ -287,8 +288,9 @@ class Page {
           operatorList: opList,
           intent
         })
-        .then(function (boundingBoxesByMCID) {
+        .then(function ([boundingBoxesByMCID, operationArray]) {
           boundingBoxes = boundingBoxesByMCID;
+          positionByOperationIndex = operationArray
           return opList;
         });
     });
@@ -299,7 +301,8 @@ class Page {
       function ([pageOpList, annotations]) {
         if (annotations.length === 0) {
           if (intent === 'oplist') {
-            pageOpList.addOp(OPS.save, boundingBoxes);
+            pageOpList.addOp(OPS.operationPosition, positionByOperationIndex);
+            pageOpList.addOp(OPS.boundingBoxes, boundingBoxes);
           }
           pageOpList.flush(true);
           return { length: pageOpList.totalLength };
